@@ -1,0 +1,7 @@
+{
+  "name": "命运星尘 (Fate Stardust)",
+  "description": "A mysterious Tarot Divination Web App using hand gestures and AI interpretations.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
