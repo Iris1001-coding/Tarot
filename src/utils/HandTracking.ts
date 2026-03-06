@@ -10,14 +10,17 @@ export class HandTracker {
   private onFist: (isFist: boolean) => void;
   private isFistState = false;
   private fistHoldStart = 0;
-  private readonly FIST_HOLD_DURATION = 300; // ms to hold fist before triggering
-  private readonly MOVEMENT_THRESHOLD = 0.01; // Speed threshold to disable fist
+  private readonly FIST_HOLD_DURATION = 300; // ms to hold pinch before triggering
 
   private onSwipe: (direction: 'left' | 'right' | 'down') => void;
   private lastCoords: HandCoordinates | null = null;
-  private swipeThreshold = 0.08; // Slightly more sensitive
   private lastSwipeTime = 0;
   private lastSwipeDirection: 'left' | 'right' | 'down' | null = null;
+
+  // Velocity-window swipe: accumulate frames instead of relying on single-frame speed
+  private positionHistory: HandCoordinates[] = [];
+  private readonly SWIPE_WINDOW = 4;
+  private readonly SWIPE_CUMULATIVE_THRESHOLD = 0.04;
 
   constructor(
     onCoordinatesUpdate: (coords: HandCoordinates) => void,
@@ -40,7 +43,7 @@ export class HandTracker {
       this.hands.setOptions({
         maxNumHands: 1,
         modelComplexity: 1,
-        minDetectionConfidence: 0.6, // Increased confidence
+        minDetectionConfidence: 0.6,
         minTrackingConfidence: 0.6,
       });
 
@@ -76,58 +79,29 @@ export class HandTracker {
   private onResults(results: Results) {
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       const landmarks = results.multiHandLandmarks[0];
-      // Use the index finger tip (landmark 8)
       const indexTip = landmarks[8];
-      
-      // Coordinates are normalized [0, 1]. We flip X because camera is mirrored.
+
+      // Coordinates are normalized [0, 1]. Flip X because camera is mirrored.
       const currentCoords = { x: 1 - indexTip.x, y: indexTip.y };
       this.onCoordinatesUpdate(currentCoords);
 
-      // Calculate movement speed
-      let speed = 0;
-      if (this.lastCoords) {
-        const dx = currentCoords.x - this.lastCoords.x;
-        const dy = currentCoords.y - this.lastCoords.y;
-        speed = Math.sqrt(dx * dx + dy * dy);
-      }
-
-      // Detect swipe
       this.detectSwipe(currentCoords);
-
-      // Detect Fist (Only if hand is relatively still)
-      if (speed < this.MOVEMENT_THRESHOLD) {
-        this.detectFist(landmarks);
-      } else {
-        // If moving fast, reset fist state immediately to prevent accidental triggering
-        if (this.isFistState) {
-          this.isFistState = false;
-          this.onFist(false);
-        }
-        this.fistHoldStart = 0;
-      }
+      this.detectPinch(landmarks);
     }
   }
 
-  private detectFist(landmarks: any[]) {
-    // Landmark 9 is the middle finger MCP (palm center approximation)
-    const palmCenter = landmarks[9];
-    const tips = [8, 12, 16, 20]; // Index, Middle, Ring, Pinky tips
+  // ── Pinch: thumb tip (4) ↔ index tip (8) distance ───────────────────────
+  // More reliable than fist — no movement gate needed
+  private detectPinch(landmarks: any[]) {
+    const thumbTip = landmarks[4];
+    const indexTip = landmarks[8];
+    const dx = thumbTip.x - indexTip.x;
+    const dy = thumbTip.y - indexTip.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
 
-    let totalDist = 0;
-    for (const tipIdx of tips) {
-      const tip = landmarks[tipIdx];
-      const dx = tip.x - palmCenter.x;
-      const dy = tip.y - palmCenter.y;
-      totalDist += Math.sqrt(dx * dx + dy * dy);
-    }
-    
-    const avgDist = totalDist / 4;
-    
-    // Threshold needs tuning, but 0.1 is a reasonable start for normalized coords
-    // If average distance of tips to palm center is small, it's a fist
-    const isFistFrame = avgDist < 0.1;
+    const isPinchFrame = dist < 0.06;
 
-    if (isFistFrame) {
+    if (isPinchFrame) {
       if (this.fistHoldStart === 0) {
         this.fistHoldStart = Date.now();
       } else if (Date.now() - this.fistHoldStart > this.FIST_HOLD_DURATION) {
@@ -145,42 +119,51 @@ export class HandTracker {
     }
   }
 
+  // ── Swipe: accumulate 5-frame trajectory, check cumulative displacement ──
   private detectSwipe(currentCoords: HandCoordinates) {
     const now = Date.now();
-    
-    // Global cooldown check
-    if (now - this.lastSwipeTime < 400) { 
+
+    // Global cooldown — reset history after each successful swipe
+    if (now - this.lastSwipeTime < 200) {
+      this.positionHistory = [];
       this.lastCoords = currentCoords;
       return;
     }
 
-    if (this.lastCoords) {
-      const dx = currentCoords.x - this.lastCoords.x;
-      const dy = currentCoords.y - this.lastCoords.y;
+    this.positionHistory.push(currentCoords);
+    if (this.positionHistory.length > this.SWIPE_WINDOW) {
+      this.positionHistory.shift();
+    }
 
-      let direction: 'left' | 'right' | 'down' | null = null;
+    // Need at least 3 frames for a meaningful direction
+    if (this.positionHistory.length < 3) {
+      this.lastCoords = currentCoords;
+      return;
+    }
 
-      if (Math.abs(dx) > this.swipeThreshold && Math.abs(dx) > Math.abs(dy)) {
-        direction = dx > 0 ? 'right' : 'left';
-      } else if (dy > this.swipeThreshold && Math.abs(dy) > Math.abs(dx)) {
-        direction = 'down';
-      }
+    const first = this.positionHistory[0];
+    const last = this.positionHistory[this.positionHistory.length - 1];
+    const dx = last.x - first.x;
+    const dy = last.y - first.y;
 
-      if (direction) {
-        // Anti-rebound logic: Ignore if opposite to last swipe within short time
-        const isOpposite = 
-          (direction === 'left' && this.lastSwipeDirection === 'right') ||
-          (direction === 'right' && this.lastSwipeDirection === 'left');
-        
-        // If it's an opposite swipe within 1000ms, ignore it (likely a recovery movement)
-        if (isOpposite && (now - this.lastSwipeTime < 1000)) {
-           // Do nothing, just update time to prevent spamming
-           // this.lastSwipeTime = now; 
-        } else {
-          this.onSwipe(direction);
-          this.lastSwipeTime = now;
-          this.lastSwipeDirection = direction;
-        }
+    let direction: 'left' | 'right' | 'down' | null = null;
+
+    if (Math.abs(dx) > this.SWIPE_CUMULATIVE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+      direction = dx > 0 ? 'right' : 'left';
+    } else if (dy > this.SWIPE_CUMULATIVE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+      direction = 'down';
+    }
+
+    if (direction) {
+      const isOpposite =
+        (direction === 'left' && this.lastSwipeDirection === 'right') ||
+        (direction === 'right' && this.lastSwipeDirection === 'left');
+
+      if (!(isOpposite && now - this.lastSwipeTime < 1000)) {
+        this.onSwipe(direction);
+        this.lastSwipeTime = now;
+        this.lastSwipeDirection = direction;
+        this.positionHistory = [];
       }
     }
 
