@@ -7,7 +7,7 @@ export interface DrawnCard {
 }
 
 export async function getInterpretation(question: string, spreadName: string, cards: DrawnCard[]): Promise<string> {
-  const apiKey = localStorage.getItem('gemini_api_key') || process.env.GEMINI_API_KEY;
+  const apiKey = localStorage.getItem('tarot_api_key') || process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return "星辰今日沉默不语——请点击右上角钥匙图标，输入你的 Gemini API Key 以启用解读功能。";
   }

@@ -48,7 +48,7 @@ export default function App() {
     if (saved) {
       setSessions(JSON.parse(saved));
     }
-    const savedKey = localStorage.getItem('gemini_api_key');
+    const savedKey = localStorage.getItem('tarot_api_key');
     if (savedKey) setApiKeyInput(savedKey);
   }, []);
 
@@ -574,7 +574,7 @@ export default function App() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <KeyRound className="w-4 h-4 text-amber-400" />
-                  <span className="font-mystic text-amber-400 text-sm tracking-widest">GEMINI API KEY</span>
+                  <span className="font-mystic text-amber-400 text-sm tracking-widest">AI 解牌 · API KEY</span>
                 </div>
                 <button onClick={() => setShowApiKeyModal(false)} className="text-white/30 hover:text-white/70 transition-colors">
                   <X className="w-4 h-4" />
@@ -582,7 +582,7 @@ export default function App() {
               </div>
 
               <p className="font-mystic text-white/40 text-[11px] leading-relaxed mb-4 tracking-wide">
-                输入你的 Gemini API Key 以解锁 AI 解牌功能。Key 仅保存在本地浏览器中，不会上传到任何服务器。
+                输入你的 AI API Key 以解锁解牌功能（当前使用 Gemini 模型）。Key 仅保存在本地浏览器中，不会上传到任何服务器。
               </p>
 
               {/* Input */}
@@ -590,7 +590,7 @@ export default function App() {
                 type="password"
                 value={apiKeyInput}
                 onChange={(e) => { setApiKeyInput(e.target.value); setApiKeySaved(false); }}
-                placeholder="AIza..."
+                placeholder="粘贴你的 API Key..."
                 className="w-full bg-white/5 border border-purple-400/25 rounded-xl px-4 py-3 font-mono text-sm text-white/80 placeholder-white/20 focus:outline-none focus:border-amber-400/50 focus:bg-white/8 transition-all mb-3"
               />
 
@@ -599,9 +599,9 @@ export default function App() {
                 onClick={() => {
                   const trimmed = apiKeyInput.trim();
                   if (trimmed) {
-                    localStorage.setItem('gemini_api_key', trimmed);
+                    localStorage.setItem('tarot_api_key', trimmed);
                   } else {
-                    localStorage.removeItem('gemini_api_key');
+                    localStorage.removeItem('tarot_api_key');
                   }
                   setApiKeySaved(true);
                   setTimeout(() => setShowApiKeyModal(false), 800);
@@ -615,7 +615,7 @@ export default function App() {
 
               {apiKeyInput && (
                 <button
-                  onClick={() => { localStorage.removeItem('gemini_api_key'); setApiKeyInput(''); setApiKeySaved(false); }}
+                  onClick={() => { localStorage.removeItem('tarot_api_key'); setApiKeyInput(''); setApiKeySaved(false); }}
                   className="w-full mt-2 py-2 text-white/25 text-xs font-mystic tracking-widest hover:text-rose-400/60 transition-colors"
                 >
                   清除 Key
