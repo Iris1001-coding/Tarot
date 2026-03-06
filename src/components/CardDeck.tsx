@@ -117,12 +117,12 @@ export const CardDeck: React.FC<CardDeckProps> = ({ onCardSelect, swipeDirection
     setCenterIndex(Math.max(0, Math.min(index, availableCards.length - 1)));
   }, [scrollPosition, availableCards.length]);
 
-  // Handle Swipe
+  // Handle Swipe — hand moves right → next card, hand moves left → previous card
   useEffect(() => {
-    if (swipeDirection === 'left') {
+    if (swipeDirection === 'right') {
       const nextIndex = Math.min(centerIndex + 1, availableCards.length - 1);
       setScrollPosition(nextIndex * (CARD_WIDTH + GAP));
-    } else if (swipeDirection === 'right') {
+    } else if (swipeDirection === 'left') {
       const nextIndex = Math.max(centerIndex - 1, 0);
       setScrollPosition(nextIndex * (CARD_WIDTH + GAP));
     }

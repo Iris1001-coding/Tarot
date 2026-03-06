@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toPng } from 'html-to-image';
 import { HandTracker, HandCoordinates } from './utils/HandTracking';
 import { StarDustCanvas } from './components/StarDustCanvas';
 import { StarField3D } from './components/StarField3D';
 import { CardDeck } from './components/CardDeck';
 import { FateTree, FateSession } from './components/FateTree';
+import { ExportCard } from './components/ExportCard';
 import { SpreadDisplay } from './components/SpreadDisplay';
 import { SpreadSelector, SPREADS, Spread } from './components/SpreadSelector';
 import { getInterpretation, DrawnCard } from './services/tarotService';
-import { Sparkles, Save, TreeDeciduous, X, ChevronRight, Camera, CameraOff, KeyRound, Check } from 'lucide-react';
+import { Sparkles, Save, TreeDeciduous, X, ChevronRight, Camera, CameraOff, KeyRound, Check, Download } from 'lucide-react';
 import { MysticOrb } from './components/MysticOrb';
 
 type AppState = 'HOME' | 'SPREAD_SELECTION' | 'ASK_QUESTION' | 'DECK' | 'SPREAD_DISPLAY' | 'INTERPRETATION' | 'TREE';
@@ -33,6 +35,26 @@ export default function App() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const trackerRef = useRef<HandTracker | null>(null);
+  const exportCardRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async (session: FateSession) => {
+    if (!exportCardRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      // Small delay to ensure offscreen element is rendered
+      await new Promise(r => setTimeout(r, 100));
+      const dataUrl = await toPng(exportCardRef.current, { pixelRatio: 2, cacheBust: true });
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `命运星尘_${session.date.replace(/\//g, '-')}.png`;
+      a.click();
+    } catch (e) {
+      console.error('Export failed:', e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Preload Images
   useEffect(() => {
@@ -152,6 +174,10 @@ export default function App() {
       setSessions(prev => [...prev, currentSession]);
       setAppState('TREE');
     }
+  };
+
+  const handleDeleteSession = (id: string) => {
+    setSessions(prev => prev.filter(s => s.id !== id));
   };
 
   // Downward swipe to save
@@ -500,16 +526,31 @@ export default function App() {
                   </div>
 
                   <div className="mt-4 flex flex-col items-center gap-3">
-                    <button
-                      onClick={handleSaveSession}
-                      className="group relative px-8 py-3 rounded-full bg-white/[0.04] border border-amber-400/20 backdrop-blur-md overflow-hidden transition-all duration-500 hover:bg-white/[0.08] hover:border-amber-400/40 hover:shadow-[0_0_25px_rgba(251,191,36,0.18)]"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-r from-rose-600/12 to-amber-500/12 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                      <div className="relative z-10 flex items-center gap-2.5">
-                        <Save className="w-4 h-4 text-amber-300/80 group-hover:text-amber-200" />
-                        <span className="font-mystic text-xs tracking-[0.3em] text-amber-200/80 group-hover:text-amber-100 transition-colors">保存至命运之树</span>
-                      </div>
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleSaveSession}
+                        className="group relative px-8 py-3 rounded-full bg-white/[0.04] border border-amber-400/20 backdrop-blur-md overflow-hidden transition-all duration-500 hover:bg-white/[0.08] hover:border-amber-400/40 hover:shadow-[0_0_25px_rgba(251,191,36,0.18)]"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-rose-600/12 to-amber-500/12 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                        <div className="relative z-10 flex items-center gap-2.5">
+                          <Save className="w-4 h-4 text-amber-300/80 group-hover:text-amber-200" />
+                          <span className="font-mystic text-xs tracking-[0.3em] text-amber-200/80 group-hover:text-amber-100 transition-colors">保存至命运之树</span>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => currentSession && handleExport(currentSession)}
+                        disabled={isExporting}
+                        className="group relative px-6 py-3 rounded-full bg-white/[0.04] border border-violet-400/20 backdrop-blur-md overflow-hidden transition-all duration-500 hover:bg-white/[0.08] hover:border-violet-400/40 hover:shadow-[0_0_25px_rgba(139,92,246,0.25)] disabled:opacity-40"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-violet-600/12 to-purple-500/12 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                        <div className="relative z-10 flex items-center gap-2.5">
+                          <Download className="w-4 h-4 text-violet-300/80 group-hover:text-violet-200" />
+                          <span className="font-mystic text-xs tracking-[0.3em] text-violet-200/80 group-hover:text-violet-100 transition-colors">
+                            {isExporting ? '生成中...' : '导出卡牌'}
+                          </span>
+                        </div>
+                      </button>
+                    </div>
                     <p className="font-mystic text-xs text-white/20 tracking-widest">或向下滑动以保存</p>
                   </div>
                 </div>
@@ -537,6 +578,7 @@ export default function App() {
                   setCurrentSession(session);
                   setAppState('INTERPRETATION');
                 }}
+                onDeleteSession={handleDeleteSession}
               />
 
               <button
@@ -625,6 +667,13 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Hidden off-screen ExportCard for png generation */}
+      {currentSession && (
+        <div style={{ position: 'absolute', left: '-9999px', top: 0, pointerEvents: 'none', zIndex: -1 }}>
+          <ExportCard ref={exportCardRef} session={currentSession} />
+        </div>
+      )}
     </div>
   );
 }

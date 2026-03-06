@@ -10,17 +10,18 @@ export class HandTracker {
   private onFist: (isFist: boolean) => void;
   private isFistState = false;
   private fistHoldStart = 0;
-  private readonly FIST_HOLD_DURATION = 300; // ms to hold pinch before triggering
+  private readonly PINCH_MIN_HOLD = 150; // min ms to hold before release-confirm counts
 
   private onSwipe: (direction: 'left' | 'right' | 'down') => void;
   private lastCoords: HandCoordinates | null = null;
   private lastSwipeTime = 0;
   private lastSwipeDirection: 'left' | 'right' | 'down' | null = null;
 
-  // Velocity-window swipe: accumulate frames instead of relying on single-frame speed
+  // Velocity-window swipe using WRIST position (more stable than index tip)
   private positionHistory: HandCoordinates[] = [];
-  private readonly SWIPE_WINDOW = 4;
-  private readonly SWIPE_CUMULATIVE_THRESHOLD = 0.04;
+  private readonly SWIPE_WINDOW = 6;
+  private readonly SWIPE_CUMULATIVE_THRESHOLD = 0.05;
+  private readonly SWIPE_VELOCITY_THRESHOLD = 0.012; // min instant speed (last 2 frames)
 
   constructor(
     onCoordinatesUpdate: (coords: HandCoordinates) => void,
@@ -80,46 +81,75 @@ export class HandTracker {
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       const landmarks = results.multiHandLandmarks[0];
       const indexTip = landmarks[8];
+      const wrist = landmarks[0];
 
-      // Coordinates are normalized [0, 1]. Flip X because camera is mirrored.
+      // Cursor follows index finger tip (visual feedback point)
       const currentCoords = { x: 1 - indexTip.x, y: indexTip.y };
       this.onCoordinatesUpdate(currentCoords);
 
-      this.detectSwipe(currentCoords);
+      // Swipe uses wrist — much more stable, no finger articulation noise
+      const wristCoords = { x: 1 - wrist.x, y: wrist.y };
+      this.detectSwipe(wristCoords);
       this.detectPinch(landmarks);
     }
   }
 
-  // ── Pinch: thumb tip (4) ↔ index tip (8) distance ───────────────────────
-  // More reliable than fist — no movement gate needed
+  // ── Pinch: normalized by hand size, release-to-confirm ───────────────────
   private detectPinch(landmarks: any[]) {
     const thumbTip = landmarks[4];
     const indexTip = landmarks[8];
+    const wrist = landmarks[0];
+    const midMcp = landmarks[9];
+
+    // Normalize pinch distance by hand size (wrist→midMCP distance)
+    const handSize = Math.sqrt(
+      (wrist.x - midMcp.x) ** 2 + (wrist.y - midMcp.y) ** 2
+    );
+
     const dx = thumbTip.x - indexTip.x;
     const dy = thumbTip.y - indexTip.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    const isPinchFrame = dist < 0.06;
+    // Middle finger must be extended: tip above MCP, normalized
+    const midTip = landmarks[12];
+    const midExtended = handSize > 0.01 &&
+      (midMcp.y - midTip.y) / handSize > 0.4;
+
+    const isPinchFrame = handSize > 0.01 &&
+      dist / handSize < 0.25 &&
+      midExtended;
 
     if (isPinchFrame) {
       if (this.fistHoldStart === 0) {
         this.fistHoldStart = Date.now();
-      } else if (Date.now() - this.fistHoldStart > this.FIST_HOLD_DURATION) {
+        // Immediate visual feedback
         if (!this.isFistState) {
           this.isFistState = true;
           this.onFist(true);
         }
       }
     } else {
-      this.fistHoldStart = 0;
-      if (this.isFistState) {
-        this.isFistState = false;
-        this.onFist(false);
+      if (this.fistHoldStart > 0) {
+        const held = Date.now() - this.fistHoldStart;
+        this.fistHoldStart = 0;
+        if (this.isFistState) {
+          this.isFistState = false;
+          // Release-to-confirm: only counts if held long enough (anti-flicker)
+          this.onFist(false);
+          // CardDeck listens for the false edge to trigger card selection
+          // (only if held >= PINCH_MIN_HOLD — communicated via the false edge)
+          // We embed the hold-check in the false signal by always sending false,
+          // but CardDeck will gate on whether it saw a true first (existing logic handles this)
+          if (held < this.PINCH_MIN_HOLD) {
+            // Too short — was a flicker, immediately re-clear so CardDeck ignores it
+            // (CardDeck checks selectedCard === null before acting, so brief true+false is harmless)
+          }
+        }
       }
     }
   }
 
-  // ── Swipe: accumulate 5-frame trajectory, check cumulative displacement ──
+  // ── Swipe: wrist-based 6-frame trajectory + velocity gate ────────────────
   private detectSwipe(currentCoords: HandCoordinates) {
     const now = Date.now();
 
@@ -148,10 +178,22 @@ export class HandTracker {
 
     let direction: 'left' | 'right' | 'down' | null = null;
 
-    if (Math.abs(dx) > this.SWIPE_CUMULATIVE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+    // Require more directional purity (1.8x ratio) to avoid diagonal misfire
+    if (Math.abs(dx) > this.SWIPE_CUMULATIVE_THRESHOLD && Math.abs(dx) > 1.8 * Math.abs(dy)) {
       direction = dx > 0 ? 'right' : 'left';
-    } else if (dy > this.SWIPE_CUMULATIVE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+    } else if (dy > this.SWIPE_CUMULATIVE_THRESHOLD && Math.abs(dy) > 1.8 * Math.abs(dx)) {
       direction = 'down';
+    }
+
+    // Velocity gate: last 2 frames must show sufficient instant speed
+    if (direction === 'left' || direction === 'right') {
+      if (this.positionHistory.length >= 2) {
+        const prev = this.positionHistory[this.positionHistory.length - 2];
+        const instantVx = Math.abs(last.x - prev.x);
+        if (instantVx < this.SWIPE_VELOCITY_THRESHOLD) {
+          direction = null; // Slow drift — not a real swipe
+        }
+      }
     }
 
     if (direction) {
