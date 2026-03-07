@@ -449,7 +449,7 @@ export const CardDeck: React.FC<CardDeckProps> = ({
                   style={{ transform: 'rotateY(180deg)' }}
                 >
                   <img
-                    src={`/assets/cards/card_${selectedCard}.png`}
+                    src={`${import.meta.env.BASE_URL}assets/cards/card_${selectedCard}.png`}
                     alt={`Card ${selectedCard}`}
                     className={`w-full h-full object-cover ${isReversed ? 'rotate-180' : ''}`}
                     style={{ filter: isReversed ? 'brightness(0.9) sepia(0.1)' : 'none' }}

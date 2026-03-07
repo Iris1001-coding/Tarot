@@ -75,11 +75,13 @@
 
 ## 手势控制逻辑
 
-- **手掌左区（0–0.33）**：向前滚动牌阵轮播
-- **手掌中区（0.33–0.66）**：停止滚动
-- **手掌右区（0.66–1.0）**：向后滚动牌阵轮播
-- **握拳（中心区域保持 1 秒）**：确认选择当前牌阵
+- **手掌向左倾斜**：牌堆向左旋转（sinRoll 检测，wrist→middleMCP 向量）
+- **手掌向右倾斜**：牌堆向右旋转
+- **手掌竖直（死区 ±7°）**：停止旋转
+- **握拳（任意位置，保持 1 秒）**：选中当前前方牌
 - **展开手掌（保持 1.5 秒）**：触发 AI 占卜解读
+
+> 若实测倾斜方向相反，在 `HandTracking.ts` `updateTiltVelocity()` 中对 `sinRoll` 取反即可。
 
 ---
 
@@ -103,8 +105,9 @@
 
 - 注释和交流使用**中文**
 - 组件使用 functional component + hooks
-- 图片路径格式：`/assets/cards/card_{index}.png`（index: 0–77）
-- MediaPipe 模型文件放在 `/public/mediapipe-hands/` 本地加载
+- 图片路径格式：`${import.meta.env.BASE_URL}assets/cards/card_{index}.png`（index: 0–77）
+  - **⚠️ 注意**：必须用 `import.meta.env.BASE_URL` 前缀，不能用 `/assets/...`（GitHub Pages 部署在 `/Tarot/` 子路径下）
+- MediaPipe 模型文件：`${import.meta.env.BASE_URL}mediapipe-hands/${file}`
 - 路径别名 `@/` 指向项目根目录
 - 环境变量存放于 `.env.local`，不提交到 git
 
@@ -138,9 +141,12 @@ npm run lint     # TypeScript 类型检查
 - [x] tarotService AI 解读（Gemini + OpenAI 兼容）
 - [x] FateTree 历史记录（命运树可视化）
 - [x] ExportCard 占卜结果导出为 PNG
+- [x] 清理 git worktrees / 冗余分支，整理 `.gitignore`
+- [x] 上传至 GitHub（`https://github.com/Iris1001-coding/Tarot.git`）
+- [x] 配置 GitHub Pages 自动部署（`.github/workflows/deploy.yml`，`base: '/Tarot/'`）
+- [x] 修复 GitHub Pages 资源路径：所有 `/assets/...` 改为 `${import.meta.env.BASE_URL}assets/...`
 
 ### 待办 / 进行中
 - [ ] 真机测试手势倾斜方向：若左右相反，将 `HandTracking.ts` `updateTiltVelocity` 中 `sinRoll` 取反
 - [ ] 手势灵敏度微调（`TILT_DEAD_ZONE`、`TILT_MAX_SIN`、`FIST_THRESHOLD`）
-- [ ] 更新到 GitHub
-- [ ] 删除冗余文件
+- [ ] 检查 GitHub Pages 是否已在仓库 Settings → Pages → Source 设置为 "GitHub Actions"

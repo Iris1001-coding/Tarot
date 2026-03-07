@@ -84,7 +84,7 @@ export const SpreadDisplay: React.FC<SpreadDisplayProps> = ({ spreadName, cards 
               </div>
               <div className="relative w-[80px] h-[128px] md:w-[120px] md:h-[192px] rounded-xl border-2 border-[#f1c40f] overflow-hidden shadow-[0_0_20px_rgba(241,196,15,0.3)] bg-[#1a1a2e]">
                 <img
-                  src={`/assets/cards/card_${card.index}.png`}
+                  src={`${import.meta.env.BASE_URL}assets/cards/card_${card.index}.png`}
                   alt={`Card ${card.index}`}
                   className={`w-full h-full object-cover ${card.isReversed ? 'rotate-180' : ''}`}
                   onError={(e) => {

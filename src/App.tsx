@@ -68,7 +68,7 @@ export default function App() {
   useEffect(() => {
     for (let i = 0; i < 78; i++) {
       const img = new Image();
-      img.src = `/assets/cards/card_${i}.png`;
+      img.src = `${import.meta.env.BASE_URL}assets/cards/card_${i}.png`;
     }
   }, []);
 

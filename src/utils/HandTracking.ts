@@ -90,7 +90,7 @@ export class HandTracker {
   public async start(videoElement: HTMLVideoElement) {
     try {
       this.hands = new Hands({
-        locateFile: (file) => `/mediapipe-hands/${file}`,
+        locateFile: (file) => `${import.meta.env.BASE_URL}mediapipe-hands/${file}`,
       });
 
       this.hands.setOptions({
