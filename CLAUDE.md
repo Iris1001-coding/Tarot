@@ -147,6 +147,16 @@ npm run lint     # TypeScript 类型检查
 - [x] 修复 GitHub Pages 资源路径：所有 `/assets/...` 改为 `${import.meta.env.BASE_URL}assets/...`
 
 ### 待办 / 进行中
-- [ ] 真机测试手势倾斜方向：若左右相反，将 `HandTracking.ts` `updateTiltVelocity` 中 `sinRoll` 取反
-- [ ] 手势灵敏度微调（`TILT_DEAD_ZONE`、`TILT_MAX_SIN`、`FIST_THRESHOLD`）
+- [ ] **手势识别无响应（高优先级）** — 需打开 DevTools Console 查看调试日志，确认卡在哪步：
+  - 步骤1：摄像头是否启动（`[HandTracker] Camera started OK`）
+  - 步骤2：MediaPipe 是否检测到手（`[HandTracker] onResults: hands=1`）
+  - 步骤3：sinRoll / avgDist 数值是否合理
+  - 已知代码问题：`FIST_THRESHOLD=0.23` 可能过紧（已改 0.28）、`App.tsx` 少传 `onPalmProgress` 回调
+- [ ] 真机测试手势倾斜方向：若左右相反，将 `updateTiltVelocity` 中 `sinRoll` 取反
 - [ ] 检查 GitHub Pages 是否已在仓库 Settings → Pages → Source 设置为 "GitHub Actions"
+
+### 手势调试步骤（打开 DevTools Console）
+1. 进入牌堆界面后，观察是否出现 `[HandTracker] Camera started OK`
+2. 将手放在摄像头前，看是否出现 `[HandTracker] onResults: hands=1`
+3. 观察每60帧打印一次的 `sinRoll` / `avgDist` / `velocity` 数值
+4. 握拳时 `avgDist` 应 < 0.28，倾斜时 `|sinRoll|` 应 > 0.08

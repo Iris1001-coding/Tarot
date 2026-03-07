@@ -105,6 +105,7 @@ export default function App() {
         (fist) => setIsFist(fist),
         (v) => { scrollVelocityRef.current = v; },
         (p) => { fistProgressRef.current = p; },
+        (_p) => { /* palmProgress — 预留，暂不使用 */ },
       );
       trackerRef.current.start(videoRef.current).then((success) => {
         setIsCameraActive(success);

@@ -3,10 +3,14 @@ import { Camera } from '@mediapipe/camera_utils';
 
 export type HandCoordinates = { x: number; y: number };
 
+// --- 调试开关（上线后可改为 false）---
+const DEBUG = true;
+let _dbgFrameCount = 0;  // 全局帧计数，用于降频打印
+
 // --- 阈值 ---
-const FIST_THRESHOLD = 0.23;
+const FIST_THRESHOLD = 0.28;    // 2D 指尖-手腕归一化距离（原0.23，放宽至0.28）
 const PALM_THRESHOLD = 0.40;
-const FIST_HOLD_TIME  = 1000;   // ms
+const FIST_HOLD_TIME  = 800;    // ms（原1000ms，缩短响应时间）
 const PALM_HOLD_TIME  = 1500;   // ms
 
 // --- 物理参数 ---
@@ -19,7 +23,7 @@ const SMOOTH_ALPHA = 0.6;       // EMA 权重（手掌位置显示）
 
 // --- 手掌倾斜检测参数 ---
 // 用 sin(rollAngle) = tiltX / |tiltVec| 代替 atan2，避免 tiltY→0 时的角度跳变
-const TILT_DEAD_ZONE = 0.12;    // sin 单位，≈7°，低于此不响应
+const TILT_DEAD_ZONE = 0.08;    // sin 单位，≈5°（原0.12，更灵敏）
 const TILT_MAX_SIN   = 0.50;    // sin 单位，≈30°，此处达到最大速度
 const TILT_SMOOTH    = 0.50;    // 向量 EMA 平滑权重
 
@@ -111,10 +115,11 @@ export class HandTracker {
       });
 
       await this.camera.start();
+      if (DEBUG) console.log('[HandTracker] Camera started OK ✅');
       this.startPhysicsLoop();
       return true;
     } catch (error) {
-      console.error('Failed to start camera/MediaPipe:', error);
+      console.error('[HandTracker] ❌ Failed to start camera/MediaPipe:', error);
       return false;
     }
   }
@@ -143,7 +148,13 @@ export class HandTracker {
   // ─── MediaPipe 结果处理 ───────────────────────────────────────────────────
 
   private onResults(results: Results) {
+    _dbgFrameCount++;
+
     if (!results.multiHandLandmarks?.length) {
+      // 降频打印：每60帧打印一次"未检测到手"
+      if (DEBUG && _dbgFrameCount % 60 === 0) {
+        console.log('[HandTracker] onResults: hands=0（未检测到手）');
+      }
       // 手丢失 — 重置连续帧计数和手势
       this.fistFrameCount = 0;
       this.palmFrameCount = 0;
@@ -154,6 +165,11 @@ export class HandTracker {
 
     const landmarks = results.multiHandLandmarks[0];
     const palm = landmarks[9];
+
+    // 首次检测到手时打印一次
+    if (DEBUG && _dbgFrameCount <= 2) {
+      console.log('[HandTracker] onResults: hands=1 ✅ 首次检测到手！');
+    }
 
     // EMA 平滑：消除 MediaPipe 输出的帧间抖动
     this.smoothedX = SMOOTH_ALPHA * (1 - palm.x) + (1 - SMOOTH_ALPHA) * this.smoothedX;
@@ -197,6 +213,11 @@ export class HandTracker {
       targetV = Math.sign(sinRoll) * Math.min(1, intensity) * MAX_SCROLL_SPEED;
     }
     this.velocity = this.velocity * (1 - LERP) + targetV * LERP;
+
+    // 降频调试：每60帧打印一次倾斜数值
+    if (DEBUG && _dbgFrameCount % 60 === 0) {
+      console.log(`[HandTracker] sinRoll=${sinRoll.toFixed(3)}  velocity=${this.velocity.toFixed(4)}  (dead=${TILT_DEAD_ZONE})`);
+    }
   }
 
   // ─── 辅助：指尖-手腕距离 ─────────────────────────────────────────────────
@@ -217,6 +238,10 @@ export class HandTracker {
   // ─── 握拳检测（迟滞：连续 N 帧后才开始计时）───────────────────────────────
 
   private detectFist(avgDist: number) {
+    // 降频打印 avgDist，帮助标定 FIST_THRESHOLD
+    if (DEBUG && _dbgFrameCount % 60 === 0) {
+      console.log(`[HandTracker] avgDist=${avgDist.toFixed(3)}  (fistThreshold=${FIST_THRESHOLD}，握拳需 < ${FIST_THRESHOLD})`);
+    }
     const isFistFrame = avgDist < FIST_THRESHOLD;
 
     if (isFistFrame) {
@@ -242,6 +267,7 @@ export class HandTracker {
 
     if (elapsed >= FIST_HOLD_TIME && !this.fistTriggered) {
       this.fistTriggered = true;
+      if (DEBUG) console.log('[HandTracker] 🤜 握拳触发！选牌');
       this.onFist(true);
       setTimeout(() => this.onFist(false), 150);
     }
