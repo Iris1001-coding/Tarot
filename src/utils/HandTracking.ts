@@ -93,8 +93,11 @@ export class HandTracker {
 
   public async start(videoElement: HTMLVideoElement) {
     try {
+      // 使用 CDN 加载 WASM 模型文件，确保与 npm 包版本严格匹配
+      // 本地 public/mediapipe-hands/ 文件因版本不一致会导致 WASM abort() 崩溃
       this.hands = new Hands({
-        locateFile: (file) => `${import.meta.env.BASE_URL}mediapipe-hands/${file}`,
+        locateFile: (file) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`,
       });
 
       this.hands.setOptions({
