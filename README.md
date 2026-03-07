@@ -102,8 +102,7 @@ cd Tarot
 npm install
 
 # 配置 API Key（可选，不配置则无法使用 AI 解读）
-cp .env.local.example .env.local
-# 编辑 .env.local，填入 VITE_GEMINI_API_KEY=你的密钥
+echo "VITE_GEMINI_API_KEY=你的密钥" > .env.local
 
 # 启动开发服务器
 npm run dev
@@ -145,7 +144,8 @@ npm run dev
 ├── .github/workflows/
 │   └── deploy.yml             # GitHub Pages 自动部署
 ├── vite.config.ts
-└── CLAUDE.md                  # 开发上下文（Claude Code 专用）
+├── CLAUDE.md                  # 开发上下文（Claude Code 专用）
+└── .env.local                 # 本地环境变量（不提交，需自行创建）
 ```
 
 ---
